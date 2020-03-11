@@ -23,7 +23,7 @@ class CreateProductsTable extends Migration
             $table->string('image');
             $table->unsignedInteger('seller_id');
 
-            $table->foreign('seller_id')->reference('id')->on('users');
+            $table->foreign('seller_id')->references('id')->on('users');
 
             $table->timestamps();
         });

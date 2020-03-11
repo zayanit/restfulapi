@@ -19,8 +19,8 @@ class CreateTransactionsTable extends Migration
             $table->unsignedInteger('buyer_id');
             $table->unsignedInteger('product_id');
 
-            $table->foreign('buyer_id')->reference('id')->on('users');
-            $table->foreign('product_id')->reference('id')->on('products');
+            $table->foreign('buyer_id')->references('id')->on('users');
+            $table->foreign('product_id')->references('id')->on('products');
 
             $table->timestamps();
         });

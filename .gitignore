@@ -12,3 +12,5 @@ yarn-error.log
 .env
 *.sublime-project
 *.sublime-workspace
+public/.DS_Store
+.DS_Store
