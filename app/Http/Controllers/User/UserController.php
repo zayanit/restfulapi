@@ -4,26 +4,28 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\ApiController;
 use App\User;
+use Exception;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
+use Illuminate\Http\Response;
 
 class UserController extends ApiController
 {
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function index()
     {
-        return response()->json(['data' => User::all()], 200);
+        return $this->showAll(User::all());
     }
 
     /**
      * Store a newly created resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @param  Request  $request
+     * @return Response
      */
     public function store(Request $request)
     {
@@ -43,28 +45,28 @@ class UserController extends ApiController
 
         $user = User::create($data);
 
-        return response()->json(['data' => $user], 201);
+        return $this->showOne($user, 201);
     }
 
     /**
      * Display the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function show($id)
     {
         $user = User::findOrFail($id);
 
-        return response()->json(['data' => $user], 200);
+        return $this->showOne($user);
     }
 
     /**
      * Update the specified resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
+     * @param  Request  $request
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function update(Request $request, $id)
     {
@@ -102,13 +104,13 @@ class UserController extends ApiController
 
         $user->save();
 
-        return response()->json(['data' => $user], 202);
+        return $this->showOne($user, 202);
     }
 
     /**
      * @param $id
-     * @throws \Exception
-     * @return \Illuminate\Http\JsonResponse
+     * @throws Exception
+     * @return JsonResponse
      */
     public function destroy($id)
     {
@@ -116,6 +118,6 @@ class UserController extends ApiController
 
         $user->delete();
 
-        return response()->json(['data' => $user], 200);
+        return $this->showOne($user);
     }
 }

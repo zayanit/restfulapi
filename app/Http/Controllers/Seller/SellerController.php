@@ -4,32 +4,32 @@ namespace App\Http\Controllers\Seller;
 
 use App\Http\Controllers\ApiController;
 use App\Seller;
-use App\Http\Controllers\Controller;
+use Illuminate\Http\Response;
 
 class SellerController extends ApiController
 {
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function index()
     {
-        $seller = Seller::has('products')->get();
+        $sellers = Seller::has('products')->get();
 
-        return response()->json(['data' => $seller], 200);
+        return $this->showAll($sellers);
     }
 
     /**
      * Display the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function show($id)
     {
         $seller = Seller::has('products')->FindOrFail($id);
 
-        return response()->json(['data' => $seller], 200);
+        return $this->showOne($seller);
     }
 }
