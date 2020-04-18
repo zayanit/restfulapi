@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 class CreateTransactionsTable extends Migration
 {
@@ -23,6 +23,7 @@ class CreateTransactionsTable extends Migration
             $table->foreign('product_id')->references('id')->on('products');
 
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
