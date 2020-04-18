@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Seller;
 
 use App\Http\Controllers\ApiController;
 use App\Seller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 
 class SellerController extends ApiController
@@ -23,13 +24,11 @@ class SellerController extends ApiController
     /**
      * Display the specified resource.
      *
-     * @param  int  $id
-     * @return Response
+     * @param  Seller  $seller
+     * @return JsonResponse
      */
-    public function show($id)
+    public function show(Seller $seller)
     {
-        $seller = Seller::has('products')->FindOrFail($id);
-
         return $this->showOne($seller);
     }
 }
