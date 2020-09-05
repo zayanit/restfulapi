@@ -2,10 +2,16 @@
 
 namespace App;
 
+use Illuminate\Database\Eloquent\SoftDeletes;
+
 class Product extends ApiModel
 {
+    use SoftDeletes;
+
     const AVAILABLE_PRODUCT = 'available';
     const UNAVAILABLE_PRODUCT = 'unavailable';
+
+    protected $dates = ['deleted_at'];
 
     protected $fillable = [
         'name',
@@ -15,6 +21,8 @@ class Product extends ApiModel
         'image',
         'seller_id'
     ];
+
+    protected $hidden = ['pivot'];
 
     public function isAvailable()
     {
@@ -33,6 +41,6 @@ class Product extends ApiModel
 
     public function transactions()
     {
-        return $this->hasMany(Transactions::class);
+        return $this->hasMany(Transaction::class);
     }
 }
