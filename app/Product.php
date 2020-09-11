@@ -43,4 +43,16 @@ class Product extends ApiModel
     {
         return $this->hasMany(Transaction::class);
     }
+
+    protected static function boot() {
+        parent::boot();
+
+        // also you can add this code in AppServiceProvider (see it there)
+        static::updated(function($product) {
+            if ($product->quantity == 0 && $product->isAvailable()) {
+                $product->status = Product::UNAVAILABLE_PRODUCT;
+                $product->save();
+            }
+        });
+    }
 }
