@@ -1,0 +1,65 @@
+version: '3'
+services:
+
+  #PHP Service
+  restfulAPI-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: digitalocean.com/php
+    container_name: restfulAPI-app
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: restfulAPI-app
+      SERVICE_TAGS: dev
+      COMPOSER_MEMORY_LIMIT: -1
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - restfulAPI-app-network
+
+  #Nginx Service
+  restfulAPI-webserver:
+    image: nginx:alpine
+    container_name: restfulAPI-webserver
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./:/var/www
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - restfulAPI-app-network
+
+  #MySQL Service
+  restfulAPI-db:
+    image: mysql:5.7.22
+    container_name: restfulAPI-db
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: restfulAPI-db
+      MYSQL_ROOT_PASSWORD: 12345
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - dbdata:/var/lib/mysql/
+      - ./mysql/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - restfulAPI-app-network
+
+#Docker Networks
+networks:
+  restfulAPI-app-network:
+    driver: bridge
+#Volumes
+volumes:
+  dbdata:
+    driver: local
