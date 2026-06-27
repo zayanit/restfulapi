@@ -5,6 +5,7 @@ namespace App;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -17,7 +18,6 @@ class User extends Authenticatable
     const REGULAR_USER = 'false';
 
     protected $table = 'users';
-    protected $dates = ['deleted_at'];
 
     /**
      * The attributes that are mass assignable.
@@ -71,6 +71,6 @@ class User extends Authenticatable
 
     public static function generateVerificationCode()
     {
-        return str_random(40);
+        return Str::random(40);
     }
 }

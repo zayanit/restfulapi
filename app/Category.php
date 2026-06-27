@@ -8,8 +8,6 @@ class Category extends ApiModel
 {
     use SoftDeletes;
 
-    protected $dates = ['deleted_at'];
-
     protected $fillable = [
         'name',
         'description'

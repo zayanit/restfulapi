@@ -11,8 +11,6 @@ class Product extends ApiModel
     const AVAILABLE_PRODUCT = 'available';
     const UNAVAILABLE_PRODUCT = 'unavailable';
 
-    protected $dates = ['deleted_at'];
-
     protected $fillable = [
         'name',
         'description',
