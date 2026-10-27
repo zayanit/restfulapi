@@ -60,6 +60,11 @@ class User extends Authenticatable
         $this->attributes['email'] = strtolower($email);
     }
 
+    public function apiTokens()
+    {
+        return $this->hasMany(ApiToken::class);
+    }
+
     public function isVerified()
     {
         return $this->verified == User::VERIFIED_USER;

@@ -18,6 +18,8 @@ class UserController extends ApiController
      */
     public function index()
     {
+        $this->authorize('viewAny', User::class);
+
         return $this->showAll(User::all());
     }
 
@@ -30,14 +32,14 @@ class UserController extends ApiController
     public function store(Request $request)
     {
         $rules = [
-            'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6|confirmed'
+            'name' => 'required|string',
+            'email' => 'required|string|email|unique:users',
+            'password' => 'required|string|min:6|confirmed'
         ];
 
         $this->validate($request, $rules);
 
-        $data = $request->all();
+        $data = $request->only(['name', 'email']);
         $data['password'] = bcrypt($request->password);
         $data['verified'] = User::UNVERIFIED_USER;
         $data['verification_token'] = User::generateVerificationCode();
@@ -56,6 +58,8 @@ class UserController extends ApiController
      */
     public function show(User $user)
     {
+        $this->authorize('view', $user);
+
         return $this->showOne($user);
     }
 
@@ -68,9 +72,17 @@ class UserController extends ApiController
      */
     public function update(Request $request, User $user)
     {
+        $this->authorize('update', $user);
+        if ($request->exists('admin')) {
+            $this->authorize('updateAdmin', $user);
+        }
+
         $rules = [
-            'email' => 'email|unique:users,email,'.$user->id,
-            'password' => 'required|min:6|confirmed',
+            'name' => 'sometimes|required|string',
+            'email' => 'sometimes|required|string|email|unique:users,email,'.$user->id,
+            'password' => 'sometimes|required|string|min:6|confirmed',
+            // credential changes need the caller's own password, so a stolen token alone can't take over an account
+            'current_password' => 'required_with:email,password|current_password:api',
             'admin' => 'in:'.User::ADMIN_USER.','.User::REGULAR_USER
         ];
 
@@ -81,14 +93,18 @@ class UserController extends ApiController
         }
 
         if ($request->has('email') && $user->email != $request->email) {
-            $user->verified = User::REGULAR_USER;
+            $user->verified = User::UNVERIFIED_USER;
             $user->verification_token = User::generateVerificationCode();
             $user->email = $request->email;
         }
 
+        if ($request->has('password')) {
+            $user->password = bcrypt($request->password);
+        }
+
         if ($request->has('admin')) {
             if (! $user->isVerified()) {
-                return $this->errorResponse('Only verified user cab modify the admin field', 409);
+                return $this->errorResponse('Only verified users can have their admin field modified', 409);
             }
 
             $user->admin = $request->admin;
@@ -98,7 +114,13 @@ class UserController extends ApiController
             return $this->errorResponse('You need to specify a different value to update', 422);
         }
 
+        $credentialsChanged = $user->isDirty(['email', 'password']);
+
         $user->save();
+
+        if ($credentialsChanged) {
+            $user->apiTokens()->delete();
+        }
 
         return $this->showOne($user, 202);
     }
@@ -110,6 +132,8 @@ class UserController extends ApiController
      */
     public function destroy(User $user)
     {
+        $this->authorize('delete', $user);
+
         $user->delete();
 
         return $this->showOne($user);

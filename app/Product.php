@@ -11,6 +11,9 @@ class Product extends ApiModel
     const AVAILABLE_PRODUCT = 'available';
     const UNAVAILABLE_PRODUCT = 'unavailable';
 
+    // sample images committed in public/img and shared by seeded products
+    const SAMPLE_IMAGES = ['1.jpg', '2.jpg', '3.jpg', '4.jpg'];
+
     protected $fillable = [
         'name',
         'description',

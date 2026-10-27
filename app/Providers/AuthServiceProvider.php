@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\ApiToken;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
@@ -13,7 +16,8 @@ class AuthServiceProvider extends ServiceProvider
      * @var array
      */
     protected $policies = [
-        'App\Model' => 'App\Policies\ModelPolicy',
+        \App\User::class => \App\Policies\UserPolicy::class,
+        \App\Product::class => \App\Policies\ProductPolicy::class,
     ];
 
     /**
@@ -25,6 +29,9 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        //
+        // each login issues its own token row, so several clients can stay signed in at once
+        Auth::viaRequest('api-token', fn (Request $request) => ApiToken::findByPlainToken($request->bearerToken())?->user);
+
+        Gate::define('manage-categories', fn (\App\User $user) => $user->isAdmin());
     }
 }

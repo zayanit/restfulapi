@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
         Product::truncate();
         Transaction::truncate();
         DB::table('category_product')->truncate();
+        DB::table('api_tokens')->truncate();
 
         User::factory()->count(2000)->create();
         Category::factory()->count(30)->create();
