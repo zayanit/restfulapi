@@ -8,6 +8,9 @@ use App\Http\Controllers\ApiController;
 use App\Product;
 use App\User;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
+use Throwable;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class SellerProductController extends ApiController
@@ -46,10 +49,15 @@ class SellerProductController extends ApiController
         $data = $request->only(['name', 'description', 'quantity']);
 
         $data['status'] = Product::UNAVAILABLE_PRODUCT;
-        $data['image'] = $request->image->store('');
+        $data['image'] = $this->storeImage($request);
         $data['seller_id'] = $seller->id;
 
-        $product = Product::create($data);
+        try {
+            $product = DB::transaction(fn () => Product::create($data));
+        } catch (Throwable $exception) {
+            Storage::disk('images')->delete($data['image']);
+            throw $exception;
+        }
 
         return $this->showOne($product);
     }
@@ -68,7 +76,9 @@ class SellerProductController extends ApiController
 
         $rules = [
             'quantity' => 'integer|min:1',
-            'status' => 'in:' . Product::AVAILABLE_PRODUCT . ', ' . Product::UNAVAILABLE_PRODUCT,
+            'name' => 'sometimes|required|string',
+            'description' => 'sometimes|required|string',
+            'status' => 'in:' . Product::AVAILABLE_PRODUCT . ',' . Product::UNAVAILABLE_PRODUCT,
             'image' => 'image'
         ];
 
@@ -88,16 +98,28 @@ class SellerProductController extends ApiController
             }
         }
 
-        if ($product->isClean()) {
+        if ($product->isClean() && ! $request->hasFile('image')) {
             return $this->errorResponse('You need to specify a different value to update', 422);
         }
 
-        if ($request->hasFile('image')) {
-            Storage::delete($product->image);
-            $product->image = $request->image->store('');
+        $originalImage = $product->image;
+        $replacement = $request->hasFile('image') ? $this->storeImage($request) : null;
+        if ($replacement !== null) {
+            $product->image = $replacement;
         }
-        
-        $product->save();
+
+        try {
+            DB::transaction(fn () => $product->save());
+        } catch (Throwable $exception) {
+            if ($replacement !== null) {
+                Storage::disk('images')->delete($replacement);
+            }
+            throw $exception;
+        }
+
+        if ($replacement !== null) {
+            Storage::disk('images')->delete($originalImage);
+        }
 
         return $this->showOne($product);
     }
@@ -115,7 +137,7 @@ class SellerProductController extends ApiController
         $this->checkSeller($seller, $product);
 
         $product->delete();
-        Storage::delete($product->image);
+        Storage::disk('images')->delete($product->image);
 
         return $this->showOne($product);
     }
@@ -125,5 +147,15 @@ class SellerProductController extends ApiController
         if ($seller->id != $product->seller_id) {
             throw new HttpException(422, 'The specified seller is not the actual seller of the product');
         }
+    }
+
+    private function storeImage(Request $request): string
+    {
+        $path = $request->file('image')->store('', 'images');
+        if ($path === false) {
+            throw new RuntimeException('Unable to store product image');
+        }
+
+        return $path;
     }
 }
