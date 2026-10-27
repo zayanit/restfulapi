@@ -78,8 +78,9 @@ class UserController extends ApiController
         }
 
         $rules = [
-            'email' => 'email|unique:users,email,'.$user->id,
-            'password' => 'required|min:6|confirmed',
+            'name' => 'sometimes|required|string',
+            'email' => 'sometimes|required|string|email|unique:users,email,'.$user->id,
+            'password' => 'sometimes|required|string|min:6|confirmed',
             'admin' => 'in:'.User::ADMIN_USER.','.User::REGULAR_USER
         ];
 
@@ -90,14 +91,20 @@ class UserController extends ApiController
         }
 
         if ($request->has('email') && $user->email != $request->email) {
-            $user->verified = User::REGULAR_USER;
+            $user->verified = User::UNVERIFIED_USER;
             $user->verification_token = User::generateVerificationCode();
             $user->email = $request->email;
+            $user->api_token = null;
+        }
+
+        if ($request->has('password')) {
+            $user->password = bcrypt($request->password);
+            $user->api_token = null;
         }
 
         if ($request->has('admin')) {
             if (! $user->isVerified()) {
-                return $this->errorResponse('Only verified user cab modify the admin field', 409);
+                return $this->errorResponse('Only verified users can have their admin field modified', 409);
             }
 
             $user->admin = $request->admin;
