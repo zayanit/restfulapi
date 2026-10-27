@@ -15,6 +15,10 @@ trait CreatesApplication
     {
         $app = require __DIR__.'/../bootstrap/app.php';
 
+        if ($app->configurationIsCached()) {
+            throw new \RuntimeException('Run php artisan config:clear before running tests; cached configuration may use a non-test database.');
+        }
+
         $app->make(Kernel::class)->bootstrap();
 
         return $app;
