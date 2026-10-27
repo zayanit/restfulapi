@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize into `Buyer` and `Seller` (both extend `App\User`), who trade `Product`s (belonging to a `Seller`, tagged with many `Category`) via `Transaction`s (a `Buyer` buying a `Product`). There is no frontend of consequence — `resources/`, `webpack.mix.js`, `package.json`, and `readme.md` are stock Laravel scaffold and not actively developed.
+A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize into `Buyer` and `Seller` (both extend `App\User`), who trade `Product`s (belonging to a `Seller`, tagged with many `Category`) via `Transaction`s (a `Buyer` buying a `Product`). There is no frontend of consequence — `resources/`, `webpack.mix.js`, and `package.json` retain the Laravel frontend scaffold. `readme.md` documents local setup and API authentication.
 
 **Legacy skeleton on a modern framework.** The app was created on Laravel 5.x and the framework was bumped to 12 without migrating the app structure. It still uses `App\Http\Kernel`, `App\Exceptions\Handler`, `App\Providers\RouteServiceProvider`, and an old-style `bootstrap/app.php`; models live directly in `App\` (not `App\Models\`); seeders are in `database/seeds/` (classmap-autoloaded). Follow these existing conventions — don't introduce Laravel 11+ `bootstrap/app.php` `withRouting`/`withMiddleware` configuration or `App\Models` alongside them.
 
@@ -12,8 +12,8 @@ A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize
 
 - Install PHP deps: `composer install`
 - Run the app locally: `php artisan serve`
-- Run all tests: `php artisan test` or `vendor/bin/phpunit`
-- Run a single test file: `vendor/bin/phpunit tests/Feature/ExampleTest.php`
+- Run all tests: `vendor/bin/phpunit`
+- Run a single test file: `vendor/bin/phpunit tests/Feature/UserUpdateTest.php`
 - Run a single test method: `vendor/bin/phpunit --filter testMethodName`
 - Regenerate autoloader after adding classes: `composer dump-autoload`
 - Run migrations: `php artisan migrate` (add `--seed` to also seed; `DatabaseSeeder` truncates all tables first)
@@ -23,7 +23,7 @@ There is no configured linter/formatter (no Pint/PHPCS config present) — match
 
 Factories are class-based (`Database\Factories\{Model}Factory`, PSR-4 autoloaded; `User` and `ApiModel` use `HasFactory`), so use `Model::factory()`. `ProductFactory` and `TransactionFactory` pick random *existing* users/sellers/products rather than creating related models, so seed in order: users → categories → products → transactions. `DatabaseSeeder` itself stays un-namespaced in `database/seeds/`; `db:seed` falls back to it.
 
-**The test suite is just the stock examples.** `tests/Feature/ExampleTest` hits `GET /`, which 404s because `routes/web.php` is empty, so `phpunit` currently reports 1 failure. `phpunit.xml` sets no `DB_CONNECTION`, so DB-backed tests would hit the `.env` database unless you configure one (e.g. sqlite `:memory:`).
+Tests cover API authentication/authorization, user updates, image replacement failures, and purchase stock handling. `phpunit.xml` forces SQLite `:memory:` and array cache/session stores. Endpoint tests extend `Tests\ApiTestCase` (`RefreshDatabase`); unit tests extend PHPUnit’s `TestCase`. Clear cached configuration before tests; the test bootstrap refuses cached config to avoid using a non-test database. SQLite does not verify MySQL row-lock concurrency. Docker uses PHP 8.4: `docker build -t restfulapi .`, then `docker run --rm restfulapi vendor/bin/phpunit --do-not-cache-result`.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ Factories are class-based (`Database\Factories\{Model}Factory`, PSR-4 autoloaded
 - `App\Seller extends User` — global scope `SellerScope` restricts sellers to users that `has('products')`.
 - Because `Buyer`/`Seller` are scoped subtypes of the same `users` table, a "buyer" or "seller" only shows up in those resources once they have at least one transaction/product respectively. That's why the *create* endpoints type-hint `User` instead of the subtype: `SellerProductController::store(Request, User $seller)` and `ProductBuyerTransactionController::store(Request, Product, User $buyer)`. A first-time seller/buyer would 404 under route-model binding otherwise. Keep this in mind for any endpoint that creates someone's first product or transaction.
 - `Product` belongsToMany `Category` (pivot `category_product`, `pivot` hidden from JSON), belongsTo `Seller`, hasMany `Transaction`. An `updated` model event in `Product::boot()` flips `status` to `unavailable` when `quantity` reaches 0.
-- Product images are stored on the `images` disk (`FILESYSTEM_DRIVER=images` → `public/img`), via `$request->image->store('')` / `Storage::delete(...)`.
+- Product images are stored on the `images` disk (`FILESYSTEM_DRIVER=images` → `public/img`), using explicit `images` disk calls for uploads and deletion.
 
 ### Controller/routing pattern
 
@@ -58,7 +58,11 @@ To abort from a helper/guard method, **throw** `Symfony\Component\HttpKernel\Exc
 
 ### Auth
 
-`app/Http/Controllers/Auth/*` are the stock Laravel `AuthenticatesUsers`/`RegistersUsers`/password-reset traits wired to session (`web`) auth. They are largely unused legacy scaffolding (no routes point at them), and the API resources in `routes/api.php` are not guarded by any `auth` middleware. Don't assume request-level authentication exists when touching resource controllers.
+`ApiTokenController` implements `POST /api/login` (five attempts per minute) and authenticated `POST /api/logout`. The existing `api` token guard hashes tokens with SHA-256; `users.api_token` is hidden and not mass assignable. Login replaces the previous token; logout and password/email changes revoke it. Send `Authorization: Bearer <token>` over HTTPS. Stock session auth controllers remain unrouted.
+
+Registration and catalog reads remain public. Account reads and every other mutation require `auth:api`. `UserPolicy` permits owners/admins to view, update, and delete accounts; listing accounts and changing roles require an admin. Product updates/deletion/category associations require the product owner or admin; product creation and purchases authorize the seller/buyer account. Category writes use the admin-only `manage-categories` gate. Keep both route middleware and controller authorization when adding endpoints.
+
+Product image writes explicitly use the `images` disk. Replacement stores the new file, saves the model transactionally, then deletes the old file; a save failure cleans up the replacement. An image-only update is valid.
 
 ### Middleware
 

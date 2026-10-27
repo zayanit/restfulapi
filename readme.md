@@ -1,51 +1,74 @@
-<p align="center"><img src="https://laravel.com/assets/img/components/logo-laravel.svg"></p>
+# Marketplace REST API
 
-<p align="center">
-<a href="https://travis-ci.org/laravel/framework"><img src="https://travis-ci.org/laravel/framework.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/d/total.svg" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/v/stable.svg" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/license.svg" alt="License"></a>
-</p>
+Laravel 12 API for users, buyers, sellers, products, categories, and purchases. PHP 8.2+ and Composer are required; local development uses MySQL. The application retains its original kernel/provider layout.
 
-## About Laravel
+## Local setup
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel attempts to take the pain out of development by easing common tasks used in the majority of web projects, such as:
+```sh
+composer install
+test -f .env || cp .env.example .env
+php artisan key:generate
+```
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Set the database credentials in `.env`, create the database, then run:
 
-Laravel is accessible, yet powerful, providing tools needed for large, robust applications. A superb combination of simplicity, elegance, and innovation give you tools you need to build any application with which you are tasked.
+```sh
+php artisan migrate
+php artisan serve
+```
 
-## Learning Laravel
+Apply migrations when upgrading too: the new `users.api_token` column is required for authentication. `php artisan db:seed` is optional and **truncates application tables**. Factories expect users before products, and products before transactions.
 
-Laravel has the most extensive and thorough documentation and video tutorial library of any modern web application framework. The [Laravel documentation](https://laravel.com/docs) is thorough, complete, and makes it a breeze to get started learning the framework.
+## Authentication and access
 
-If you're not in the mood to read, [Laracasts](https://laracasts.com) contains over 900 video tutorials on a range of topics including Laravel, modern PHP, unit testing, JavaScript, and more. Boost the skill level of yourself and your entire team by digging into our comprehensive video library.
+Register using `POST /api/users` with `name`, `email`, `password`, and `password_confirmation`. Registration always creates an unverified, non-admin account. Obtain a token:
 
-## Laravel Sponsors
+```sh
+curl -X POST http://127.0.0.1:8000/api/login \
+  -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -d '{"email":"you@example.com","password":"your-password"}'
+```
 
-We would like to extend our thanks to the following sponsors for helping fund on-going Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](http://patreon.com/taylorotwell):
+Use the returned `data.token` as `Authorization: Bearer <token>` over HTTPS outside local development. Tokens are stored as SHA-256 hashes and excluded from user JSON. Login allows five attempts per minute per IP and replaces the previous token. `POST /api/logout`, password changes, and email changes revoke the current token; log in again afterward.
 
-- **[Vehikl](http://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[British Software Development](https://www.britishsoftware.co)**
-- **[Styde](https://styde.net)**
-- [Fragrantica](https://www.fragrantica.com)
-- [SOFTonSOFA](https://softonsofa.com/)
+| Operation | Access |
+| --- | --- |
+| Registration, login, catalog reads | Public |
+| View/update/delete an account | Account owner or admin |
+| List accounts or change admin roles | Admin; role changes require a verified target |
+| Create/update/delete products; attach/detach categories | Seller/product owner or admin |
+| Create a purchase | Buyer or admin; buyer and seller must be verified |
+| Create/update/delete categories | Admin |
 
-## Contributing
+An owner can update their name or email without sending a password. To change a password, send both `password` and matching `password_confirmation`. Email changes reset verification. Product image-only updates are supported.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](http://laravel.com/docs/contributions).
+There is no email verification delivery flow yet. For a local development account, use `php artisan tinker` to provision a trusted admin:
 
-## Security Vulnerabilities
+```php
+App\User::where('email', 'you@example.com')->firstOrFail()->forceFill([
+    'verified' => App\User::VERIFIED_USER,
+    'verification_token' => null,
+    'admin' => App\User::ADMIN_USER,
+])->save();
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell at taylor@laravel.com. All security vulnerabilities will be promptly addressed.
+## Tests and Docker
+
+```sh
+vendor/bin/phpunit --do-not-cache-result
+vendor/bin/phpunit tests/Feature/UserUpdateTest.php
+docker build -t restfulapi .
+docker run --rm restfulapi vendor/bin/phpunit --do-not-cache-result
+```
+
+Run `php artisan config:clear` first if configuration is cached; tests refuse cached configuration. Tests force an in-memory SQLite database and use fake image storage; they do not use your `.env` database. They cover authentication, ownership, updates, failed image writes, and purchase stock changes. SQLite does not exercise MySQL's concurrent row locks.
+
+The PHP 8.4 Docker image includes Composer dependencies, MySQL/SQLite drivers, and GD. It runs PHP-FPM on port 9000; an HTTP reverse proxy is needed to serve requests. The legacy Compose stack requires the local nginx/PHP/MySQL configuration files referenced in `docker-compose.yml`; its sample credentials are for local use only. `.dockerignore` excludes environment secrets, local dependencies, and runtime caches from the image.
+
+## Legacy frontend scaffold
+
+`npm install`, then `npm run dev`, `npm run watch`, or `npm run prod` builds the optional Vue/Sass assets through Laravel Mix. These assets are separate from the API test suite.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT).
+The Laravel framework is licensed under the [MIT license](https://opensource.org/licenses/MIT).
