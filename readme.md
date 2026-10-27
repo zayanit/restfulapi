@@ -63,7 +63,16 @@ docker run --rm restfulapi vendor/bin/phpunit --do-not-cache-result
 
 Run `php artisan config:clear` first if configuration is cached; tests refuse cached configuration. Tests force an in-memory SQLite database and use fake image storage; they do not use your `.env` database. They cover authentication, ownership, updates, failed image writes, and purchase stock changes. SQLite does not exercise MySQL's concurrent row locks.
 
-The PHP 8.4 Docker image includes Composer dependencies, MySQL/SQLite drivers, and GD. It runs PHP-FPM on port 9000; an HTTP reverse proxy is needed to serve requests. The legacy Compose stack requires the local nginx/PHP/MySQL configuration files referenced in `docker-compose.yml`; its sample credentials are for local use only. `.dockerignore` excludes environment secrets, local dependencies, and runtime caches from the image.
+The PHP 8.4 Docker image includes Composer dependencies, MySQL/SQLite drivers, and GD. It runs PHP-FPM on port 9000; an HTTP reverse proxy is needed to serve requests. To run the full stack (PHP-FPM, nginx on port 80, MySQL 5.7 on port 3306):
+
+```sh
+test -f .env || cp .env.example .env
+docker compose up -d --build
+docker compose exec restfulAPI-app php artisan key:generate
+docker compose exec restfulAPI-app php artisan migrate
+```
+
+The API is then served at `http://localhost/api`. Compose sets the database connection itself, overriding `.env`. The nginx, PHP, and MySQL settings live in `nginx/conf.d/`, `php/local.ini`, and `mysql/my.cnf`. Its sample credentials are for local use only. `.dockerignore` excludes environment secrets, local dependencies, and runtime caches from the image.
 
 ## Legacy frontend scaffold
 

@@ -17,7 +17,7 @@ A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize
 - Run a single test method: `vendor/bin/phpunit --filter testMethodName`
 - Regenerate autoloader after adding classes: `composer dump-autoload`
 - Run migrations: `php artisan migrate` (add `--seed` to also seed; `DatabaseSeeder` truncates all tables first)
-- Docker stack (app + nginx + mysql 5.7): `docker-compose up -d` (see `Dockerfile`, `docker-compose.yml`)
+- Docker stack (app + nginx + mysql 5.7): `docker compose up -d --build` (see `Dockerfile`, `docker-compose.yml`)
 
 There is no configured linter/formatter (no Pint/PHPCS config present) — match the existing code style when editing.
 
