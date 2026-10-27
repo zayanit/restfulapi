@@ -72,7 +72,7 @@ docker compose exec restfulAPI-app php artisan key:generate
 docker compose exec restfulAPI-app php artisan migrate
 ```
 
-The API is then served at `http://localhost/api`. Compose sets the database connection itself, overriding `.env`. The nginx, PHP, and MySQL settings live in `nginx/conf.d/`, `php/local.ini`, and `mysql/my.cnf`. Its sample credentials are for local use only. `.dockerignore` excludes environment secrets, local dependencies, and runtime caches from the image.
+The API is then served at `http://localhost/api`. The container keeps the image's `vendor/` in an anonymous volume, which Compose reuses across rebuilds; after changing `composer.json` or `composer.lock`, run `docker compose up -d --build -V` (`--renew-anon-volumes`) so it is refreshed. Compose sets the database connection itself, overriding `.env`. The nginx, PHP, and MySQL settings live in `nginx/conf.d/`, `php/local.ini`, and `mysql/my.cnf`. Its sample credentials are for local use only. `.dockerignore` excludes environment secrets, local dependencies, and runtime caches from the image.
 
 ## Legacy frontend scaffold
 

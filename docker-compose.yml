@@ -24,7 +24,8 @@ services:
     working_dir: /var/www
     volumes:
       - ./:/var/www
-      # keep the image's PHP 8.4 vendor/ instead of the host's (or a missing) one
+      # keep the image's PHP 8.4 vendor/ instead of the host's (or a missing) one;
+      # after dependency changes, rebuild with `up -d --build -V` to refresh it
       - /var/www/vendor
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
     networks:
