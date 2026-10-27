@@ -20,9 +20,18 @@ class ProductBuyerTransactionController extends ApiController
      */
     public function store(Request $request, Product $product, User $buyer)
     {
-        $this->checkAddingPossibility($request, $product, $buyer);        
+        $rules = [
+            'quantity' => 'required|integer|min:1'
+        ];
+
+        $this->validate($request, $rules);
 
         return DB::transaction(function() use ($request, $product, $buyer) {
+            // lock the product row so concurrent purchases can't oversell the stock
+            $product = Product::lockForUpdate()->findOrFail($product->id);
+
+            $this->checkAddingPossibility($request, $product, $buyer);
+
             $product->quantity -= $request->quantity;
             $product->save();
 
@@ -39,12 +48,6 @@ class ProductBuyerTransactionController extends ApiController
 
     protected function checkAddingPossibility(Request $request, Product $product, User $buyer)
     {
-        $rules = [
-            'quantity' => 'required|integer|min:1'
-        ];
-
-        $this->validate($request, $rules);
-
         if ($buyer->id == $product->seller->id) {
             throw new HttpException(409, 'The buyer must be different from the seller');
         }
