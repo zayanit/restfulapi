@@ -8,6 +8,7 @@ use App\Http\Controllers\ApiController;
 use App\Transaction;
 use App\User;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ProductBuyerTransactionController extends ApiController
 {
@@ -45,23 +46,23 @@ class ProductBuyerTransactionController extends ApiController
         $this->validate($request, $rules);
 
         if ($buyer->id == $product->seller->id) {
-            return $this->errorResponse('The buyer must be different from the seller', 409);
+            throw new HttpException(409, 'The buyer must be different from the seller');
         }
 
         if (!$buyer->isVerified()) {
-            return $this->errorResponse('The buyer must be a verified user', 409);
+            throw new HttpException(409, 'The buyer must be a verified user');
         }
 
         if (!$product->seller->isVerified()) {
-            return $this->errorResponse('The seller must be a verified user', 409);
+            throw new HttpException(409, 'The seller must be a verified user');
         }
 
         if (!$product->isAvailable()) {
-            return $this->errorResponse('The product is not available', 409);
+            throw new HttpException(409, 'The product is not available');
         }
 
         if ($product->quantity < $request->quantity) {
-            return $this->errorResponse('The product does not have enough units for this transaction', 409);
+            throw new HttpException(409, 'The product does not have enough units for this transaction');
         }
     }
 }

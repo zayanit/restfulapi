@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize into `Buyer` and `Seller` (both extend `App\User`), who trade `Product`s (belonging to a `Seller`, tagged with many `Category`) via `Transaction`s (a `Buyer` buying a `Product`). There is no frontend of consequence — `resources/`, `webpack.mix.js`, and `package.json` are the stock Laravel scaffold and not actively developed.
+A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize into `Buyer` and `Seller` (both extend `App\User`), who trade `Product`s (belonging to a `Seller`, tagged with many `Category`) via `Transaction`s (a `Buyer` buying a `Product`). There is no frontend of consequence — `resources/`, `webpack.mix.js`, `package.json`, and `readme.md` are stock Laravel scaffold and not actively developed.
+
+**Legacy skeleton on a modern framework.** The app was created on Laravel 5.x and the framework was bumped to 12 without migrating the app structure. It still uses `App\Http\Kernel`, `App\Exceptions\Handler`, `App\Providers\RouteServiceProvider`, and an old-style `bootstrap/app.php`; models live directly in `App\` (not `App\Models\`); seeders are in `database/seeds/` (classmap-autoloaded). Follow these existing conventions — don't introduce Laravel 11+ `bootstrap/app.php` `withRouting`/`withMiddleware` configuration or `App\Models` alongside them.
 
 ## Commands
 
@@ -14,25 +16,32 @@ A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize
 - Run a single test file: `vendor/bin/phpunit tests/Feature/ExampleTest.php`
 - Run a single test method: `vendor/bin/phpunit --filter testMethodName`
 - Regenerate autoloader after adding classes: `composer dump-autoload`
-- Run migrations: `php artisan migrate` (add `--seed` to also seed)
+- Run migrations: `php artisan migrate`
 - Docker stack (app + nginx + mysql 5.7): `docker-compose up -d` (see `Dockerfile`, `docker-compose.yml`)
 
 There is no configured linter/formatter (no Pint/PHPCS config present) — match the existing code style when editing.
+
+Known-broken areas:
+- **Seeding/factories don't work.** `database/factories/ModelFactory.php` uses the pre-Laravel-8 `$factory->define(...)` API and `str_random()`, and `DatabaseSeeder` calls the removed global `factory()` helper. `migrate --seed` will fail until these are rewritten as class-based factories (`HasFactory`).
+- **The test suite is just the stock examples.** `tests/Feature/ExampleTest` hits `GET /`, which 404s because `routes/web.php` is empty, so `phpunit` currently reports 1 failure. `phpunit.xml` sets no `DB_CONNECTION`, so DB-backed tests would hit the `.env` database unless you configure one (e.g. sqlite `:memory:`).
 
 ## Architecture
 
 ### Model hierarchy and scoping
 
 - `App\ApiModel` — base class for `Category`, `Product`, `Transaction`; adds `SoftDeletes`.
-- `App\User` — base Eloquent auth model (also uses `SoftDeletes`). Has `verified`/`admin` string-flag constants (`VERIFIED_USER`, `ADMIN_USER`, etc.) rather than booleans.
+- `App\User` — base Eloquent auth model (also uses `SoftDeletes`). Has `verified`/`admin` string-flag constants (`VERIFIED_USER = '1'`, `ADMIN_USER = 'true'`, etc.) rather than booleans. Mutators lowercase `name`/`email` on write, and `name` is `ucwords`'d on read.
 - `App\Buyer extends User` — global scope `BuyerScope` restricts buyers to users that `has('transactions')`.
 - `App\Seller extends User` — global scope `SellerScope` restricts sellers to users that `has('products')`.
-- Because `Buyer`/`Seller` are scoped subtypes of the same `users` table, a "buyer" or "seller" only shows up in those resources once they have at least one transaction/product respectively.
-- `Product` belongsToMany `Category` (pivot `category_product`), belongsTo `Seller`, hasMany `Transaction`. A DB trigger-like `boot()` hook auto-flips `status` to `unavailable` when `quantity` hits 0 on update.
+- Because `Buyer`/`Seller` are scoped subtypes of the same `users` table, a "buyer" or "seller" only shows up in those resources once they have at least one transaction/product respectively. That's why the *create* endpoints type-hint `User` instead of the subtype: `SellerProductController::store(Request, User $seller)` and `ProductBuyerTransactionController::store(Request, Product, User $buyer)`. A first-time seller/buyer would 404 under route-model binding otherwise. Keep this in mind for any endpoint that creates someone's first product or transaction.
+- `Product` belongsToMany `Category` (pivot `category_product`, `pivot` hidden from JSON), belongsTo `Seller`, hasMany `Transaction`. An `updated` model event in `Product::boot()` flips `status` to `unavailable` when `quantity` reaches 0.
+- Product images are stored on the `images` disk (`FILESYSTEM_DRIVER=images` → `public/img`), via `$request->image->store('')` / `Storage::delete(...)`.
 
 ### Controller/routing pattern
 
-Routes live entirely in `routes/api.php` (no `web.php` routes are used) and are declared as nested `Route::resource(...)` pairs mirroring the model relationships, e.g. `products.categories`, `sellers.products`, `buyers.transactions`. Controllers are namespaced and directoried by their **primary** resource (`app/Http/Controllers/{Buyer,Category,Product,Seller,Transaction,User}/`), and a nested-resource controller name is `{Primary}{Nested}Controller`, e.g. `ProductCategoryController` handles `products/{product}/categories`. When adding a new nested endpoint, follow this same directory/naming convention and register it in `routes/api.php` next to its sibling resources.
+Routes live entirely in `routes/api.php` and are served under the `/api` prefix (set in `RouteServiceProvider`). `routes/web.php` is loaded but empty. Routes are declared as nested `Route::resource(...)` pairs mirroring the model relationships, e.g. `products.categories`, `sellers.products`, `buyers.transactions`, plus the three-level `products.buyers.transactions` (store only), and are restricted with `only`/`except`. Controllers are namespaced and directoried by their **primary** resource (`app/Http/Controllers/{Buyer,Category,Product,Seller,Transaction,User}/`), and a nested-resource controller name is `{Primary}{Nested}Controller`, e.g. `ProductCategoryController` handles `products/{product}/categories`. When adding a new nested endpoint, follow this same directory/naming convention and register it in `routes/api.php` next to its sibling resources.
+
+Read-only nested "index" endpoints that cross more than one relationship (e.g. `BuyerCategoryController`) are built by eager-loading through the chain and then flattening in PHP: `->with('product.categories')->get()->pluck('product.categories')->collapse()->unique('id')->values()`. Reuse that idiom for new ones.
 
 All API controllers extend `App\Http\Controllers\ApiController`, which pulls in the `App\Traits\ApiResponser` trait for consistent JSON responses:
 - `showAll($collection, $code = 200)` — wraps a collection as `{"data": [...]}`
@@ -41,10 +50,16 @@ All API controllers extend `App\Http\Controllers\ApiController`, which pulls in 
 
 Use these helpers rather than calling `response()->json()` directly in new controllers.
 
+### Error handling
+
+`App\Exceptions\Handler` also uses `ApiResponser` and converts exceptions into the same `{"error", "code"}` shape. Validation errors become 422 with the field→messages map as `error`, `ModelNotFoundException` becomes 404 ("Does not exist any {model}..."), any `HttpException` passes its status/message through, MySQL FK error 1451 becomes 409, and anything else becomes a generic 500 (unless `APP_DEBUG`). Controllers validate with `$this->validate($request, $rules)` and let the handler format the failure.
+
+To abort from a helper/guard method, **throw** `Symfony\Component\HttpKernel\Exception\HttpException` (as `SellerProductController::checkSeller` and `ProductBuyerTransactionController::checkAddingPossibility` do). Returning `$this->errorResponse(...)` from a helper does nothing unless the caller returns that value too.
+
 ### Auth
 
-`app/Http/Controllers/Auth/*` are the stock Laravel `AuthenticatesUsers`/`RegistersUsers`/password-reset traits wired to session (`web`) auth — they are largely unused/legacy scaffolding, since the actual API resources under `routes/api.php` are not currently guarded by an `auth` middleware. Be cautious assuming request-level authentication exists when touching resource controllers.
+`app/Http/Controllers/Auth/*` are the stock Laravel `AuthenticatesUsers`/`RegistersUsers`/password-reset traits wired to session (`web`) auth. They are largely unused legacy scaffolding (no routes point at them), and the API resources in `routes/api.php` are not guarded by any `auth` middleware. Don't assume request-level authentication exists when touching resource controllers.
 
 ### Middleware
 
-`api` route group applies `throttle:60,1` and `bindings` (route-model binding substitution) — see `app/Http/Kernel.php`. There is no CSRF/session middleware on API routes.
+The `api` route group applies `throttle:60,1` and `bindings` (route-model binding substitution); see `app/Http/Kernel.php`. There is no CSRF/session middleware on API routes.
