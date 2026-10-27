@@ -76,6 +76,49 @@ class ProductImageTest extends ApiTestCase
         $this->assertSame(['old.jpg'], $disk->allFiles());
     }
 
+    public function testReplacingImageKeepsFileSharedWithAnotherProduct(): void
+    {
+        Storage::fake('images');
+        Storage::disk('images')->put('shared.jpg', 'shared');
+        $seller = $this->user();
+        $product = $this->product($seller, ['image' => 'shared.jpg']);
+        $this->product($this->user(), ['image' => 'shared.jpg']);
+
+        $this->actingAs($seller, 'api')->postJson("/api/sellers/{$seller->id}/products/{$product->id}", [
+            '_method' => 'PATCH', 'image' => UploadedFile::fake()->image('new.jpg'),
+        ])->assertOk();
+
+        Storage::disk('images')->assertExists('shared.jpg');
+    }
+
+    public function testReplacingImageKeepsSampleImage(): void
+    {
+        Storage::fake('images');
+        Storage::disk('images')->put('1.jpg', 'sample');
+        $seller = $this->user();
+        $product = $this->product($seller, ['image' => '1.jpg']);
+
+        $this->actingAs($seller, 'api')->postJson("/api/sellers/{$seller->id}/products/{$product->id}", [
+            '_method' => 'PATCH', 'image' => UploadedFile::fake()->image('new.jpg'),
+        ])->assertOk();
+
+        Storage::disk('images')->assertExists('1.jpg');
+    }
+
+    public function testDeletingProductKeepsImageForRestore(): void
+    {
+        Storage::fake('images');
+        Storage::disk('images')->put('own.jpg', 'own');
+        $seller = $this->user();
+        $product = $this->product($seller, ['image' => 'own.jpg']);
+
+        $this->actingAs($seller, 'api')->deleteJson("/api/sellers/{$seller->id}/products/{$product->id}")
+            ->assertOk();
+
+        $this->assertSoftDeleted($product);
+        Storage::disk('images')->assertExists('own.jpg');
+    }
+
     public function testFirstTimeSellerCanCreateOwnProduct(): void
     {
         Storage::fake('images');

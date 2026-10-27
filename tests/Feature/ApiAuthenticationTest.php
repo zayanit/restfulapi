@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\ApiToken;
 use App\Category;
 use App\User;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -50,7 +51,7 @@ class ApiAuthenticationTest extends ApiTestCase
         $response = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret'])
             ->assertOk()->assertJsonPath('data.token_type', 'Bearer');
         $token = $response->json('data.token');
-        $this->assertSame(hash('sha256', $token), $user->fresh()->api_token);
+        $this->assertDatabaseHas('api_tokens', ['user_id' => $user->id, 'token' => ApiToken::hash($token)]);
 
         $this->app['auth']->forgetGuards();
         $this->withToken($token)->getJson("/api/users/{$user->id}")->assertOk()
@@ -81,14 +82,17 @@ class ApiAuthenticationTest extends ApiTestCase
             ->assertStatus(429)->assertHeader('Retry-After');
     }
 
-    public function testNewLoginReplacesPreviousToken(): void
+    public function testNewLoginKeepsOtherClientsSignedIn(): void
     {
         $user = $this->user();
-        $user->forceFill(['api_token' => hash('sha256', 'previous-token')])->save();
-        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret'])->assertOk();
+        $this->issueToken($user, 'previous-token');
+        $token = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret'])
+            ->assertOk()->json('data.token');
 
-        $this->app['auth']->forgetGuards();
-        $this->withToken('previous-token')->getJson("/api/users/{$user->id}")->assertUnauthorized();
+        foreach (['previous-token', $token] as $plainToken) {
+            $this->app['auth']->forgetGuards();
+            $this->withToken($plainToken)->getJson("/api/users/{$user->id}")->assertOk();
+        }
     }
 
     public function testInvalidTokenIsRejected(): void
@@ -100,7 +104,7 @@ class ApiAuthenticationTest extends ApiTestCase
     public function testDeletedAccountCannotUseToken(): void
     {
         $user = $this->user();
-        $user->forceFill(['api_token' => hash('sha256', 'deleted-token')])->save();
+        $this->issueToken($user, 'deleted-token');
         $user->delete();
         $this->withToken('deleted-token')->getJson('/api/users')->assertUnauthorized();
     }
@@ -110,15 +114,19 @@ class ApiAuthenticationTest extends ApiTestCase
         $this->get('/api/users')->assertUnauthorized()->assertJsonPath('code', 401);
     }
 
-    public function testLogoutRevokesToken(): void
+    public function testLogoutRevokesOnlyTheCurrentToken(): void
     {
         $user = $this->user();
-        $user->forceFill(['api_token' => hash('sha256', 'logout-token')])->save();
+        $this->issueToken($user, 'logout-token');
+        $this->issueToken($user, 'other-device-token');
 
-        $this->withToken('logout-token')->postJson('/api/logout')->assertOk();
-        $this->assertNull($user->fresh()->api_token);
+        $this->withToken('logout-token')->postJson('/api/logout')->assertOk()
+            ->assertJsonPath('data.message', 'Logged out');
+
         $this->app['auth']->forgetGuards();
-        $this->getJson("/api/users/{$user->id}")->assertUnauthorized();
+        $this->withToken('logout-token')->getJson("/api/users/{$user->id}")->assertUnauthorized();
+        $this->app['auth']->forgetGuards();
+        $this->withToken('other-device-token')->getJson("/api/users/{$user->id}")->assertOk();
     }
 
     public function testRegularUserCannotListAccounts(): void

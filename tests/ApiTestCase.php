@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\ApiToken;
 use App\Product;
 use App\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +18,11 @@ abstract class ApiTestCase extends TestCase
             'verification_token' => null,
             'admin' => User::REGULAR_USER,
         ], $attributes));
+    }
+
+    protected function issueToken(User $user, string $plainToken): ApiToken
+    {
+        return $user->apiTokens()->create(['token' => ApiToken::hash($plainToken)]);
     }
 
     protected function product(User $seller, array $attributes = []): Product

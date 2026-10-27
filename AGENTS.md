@@ -32,4 +32,4 @@ Use short imperative commit subjects, following history: `Fix high dependency vu
 
 ## Security & Configuration
 
-Keep credentials in untracked `.env` files. Run migrations before using API tokens. `POST /api/login` issues a bearer token; logout and password/email changes revoke it. Protect mutations with `auth:api` and policies; category writes and role changes require an admin. See `readme.md` for access rules. Never reuse sample database credentials outside local development.
+Keep credentials in untracked `.env` files. Run migrations before using API tokens. `POST /api/login` issues a bearer token per login; logout revokes that token, and password/email changes (which require `current_password`) revoke all of the account's tokens. Protect mutations with `auth:api` and policies; category writes and role changes require an admin. See `readme.md` for access rules. Never reuse sample database credentials outside local development.

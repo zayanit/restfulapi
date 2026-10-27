@@ -42,8 +42,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
-        'verification_token',
-        'api_token'
+        'verification_token'
     ];
 
     public function setNameAttribute(string $name)
@@ -59,6 +58,11 @@ class User extends Authenticatable
     public function setEmailAttribute(string $email)
     {
         $this->attributes['email'] = strtolower($email);
+    }
+
+    public function apiTokens()
+    {
+        return $this->hasMany(ApiToken::class);
     }
 
     public function isVerified()

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\ApiToken;
 use App\Http\Controllers\ApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,15 +23,15 @@ class ApiTokenController extends ApiController
         }
 
         $token = Str::random(80);
-        Auth::guard('web')->user()->forceFill(['api_token' => hash('sha256', $token)])->save();
+        Auth::guard('web')->user()->apiTokens()->create(['token' => ApiToken::hash($token)]);
 
-        return response()->json(['data' => ['token' => $token, 'token_type' => 'Bearer']]);
+        return $this->showData(['token' => $token, 'token_type' => 'Bearer']);
     }
 
     public function destroy(Request $request)
     {
-        $request->user()->forceFill(['api_token' => null])->save();
+        ApiToken::findByPlainToken($request->bearerToken())?->delete();
 
-        return response()->json(['data' => ['message' => 'Logged out']]);
+        return $this->showData(['message' => 'Logged out']);
     }
 }

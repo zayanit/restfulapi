@@ -81,6 +81,8 @@ class UserController extends ApiController
             'name' => 'sometimes|required|string',
             'email' => 'sometimes|required|string|email|unique:users,email,'.$user->id,
             'password' => 'sometimes|required|string|min:6|confirmed',
+            // credential changes need the caller's own password, so a stolen token alone can't take over an account
+            'current_password' => 'required_with:email,password|current_password:api',
             'admin' => 'in:'.User::ADMIN_USER.','.User::REGULAR_USER
         ];
 
@@ -94,12 +96,10 @@ class UserController extends ApiController
             $user->verified = User::UNVERIFIED_USER;
             $user->verification_token = User::generateVerificationCode();
             $user->email = $request->email;
-            $user->api_token = null;
         }
 
         if ($request->has('password')) {
             $user->password = bcrypt($request->password);
-            $user->api_token = null;
         }
 
         if ($request->has('admin')) {
@@ -114,7 +114,13 @@ class UserController extends ApiController
             return $this->errorResponse('You need to specify a different value to update', 422);
         }
 
+        $credentialsChanged = $user->isDirty(['email', 'password']);
+
         $user->save();
+
+        if ($credentialsChanged) {
+            $user->apiTokens()->delete();
+        }
 
         return $this->showOne($user, 202);
     }

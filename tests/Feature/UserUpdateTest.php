@@ -20,25 +20,52 @@ class UserUpdateTest extends ApiTestCase
         $this->assertSame($password, $user->fresh()->password);
     }
 
-    public function testPasswordChangeIsHashedAndRevokesExistingToken(): void
+    public function testPasswordChangeIsHashedAndRevokesAllTokens(): void
     {
         $user = $this->user();
-        $user->forceFill(['api_token' => hash('sha256', 'old-token')])->save();
+        $this->issueToken($user, 'old-token');
+        $this->issueToken($user, 'other-device-token');
 
         $this->actingAs($user, 'api')->patchJson("/api/users/{$user->id}", [
-            'password' => 'new-password', 'password_confirmation' => 'new-password',
+            'current_password' => 'secret', 'password' => 'new-password', 'password_confirmation' => 'new-password',
         ])->assertStatus(202);
 
         $this->assertTrue(Hash::check('new-password', $user->fresh()->password));
-        $this->assertNull($user->fresh()->api_token);
+        $this->assertDatabaseMissing('api_tokens', ['user_id' => $user->id]);
+    }
+
+    public static function credentialChangesWithoutCurrentPassword(): array
+    {
+        return [
+            'email, missing' => [['email' => 'changed@example.com']],
+            'password, missing' => [['password' => 'new-password', 'password_confirmation' => 'new-password']],
+            'password, wrong' => [[
+                'current_password' => 'wrong', 'password' => 'new-password', 'password_confirmation' => 'new-password',
+            ]],
+        ];
+    }
+
+    #[DataProvider('credentialChangesWithoutCurrentPassword')]
+    public function testCredentialChangeRequiresCurrentPassword(array $changes): void
+    {
+        $user = $this->user();
+        $this->issueToken($user, 'stolen-token');
+
+        $this->withToken('stolen-token')->patchJson("/api/users/{$user->id}", $changes)
+            ->assertUnprocessable()->assertJsonStructure(['error' => ['current_password']]);
+
+        $this->assertTrue(Hash::check('secret', $user->fresh()->password));
+        $this->assertSame($user->email, $user->fresh()->email);
+        $this->assertDatabaseHas('api_tokens', ['user_id' => $user->id]);
     }
 
     public function testEmailChangeResetsVerificationAndToken(): void
     {
         $user = $this->user();
 
-        $this->actingAs($user, 'api')->patchJson("/api/users/{$user->id}", ['email' => 'new@example.com'])
-            ->assertStatus(202);
+        $this->actingAs($user, 'api')->patchJson("/api/users/{$user->id}", [
+            'current_password' => 'secret', 'email' => 'new@example.com',
+        ])->assertStatus(202);
 
         $this->assertSame(User::UNVERIFIED_USER, $user->fresh()->verified);
         $this->assertNotEmpty($user->fresh()->verification_token);
@@ -82,15 +109,16 @@ class UserUpdateTest extends ApiTestCase
     public function testPasswordConfirmationIsRequiredWhenChangingPassword(): void
     {
         $user = $this->user();
-        $this->actingAs($user, 'api')->patchJson("/api/users/{$user->id}", ['password' => 'new-password'])
-            ->assertUnprocessable()->assertJsonStructure(['error' => ['password']]);
+        $this->actingAs($user, 'api')->patchJson("/api/users/{$user->id}", [
+            'current_password' => 'secret', 'password' => 'new-password',
+        ])->assertUnprocessable()->assertJsonStructure(['error' => ['password']]);
     }
 
     public static function credentialChanges(): array
     {
         return [
-            [['email' => 'changed@example.com']],
-            [['password' => 'new-password', 'password_confirmation' => 'new-password']],
+            [['current_password' => 'secret', 'email' => 'changed@example.com']],
+            [['current_password' => 'secret', 'password' => 'new-password', 'password_confirmation' => 'new-password']],
         ];
     }
 
@@ -98,7 +126,7 @@ class UserUpdateTest extends ApiTestCase
     public function testCredentialChangeRevokesBearerToken(array $changes): void
     {
         $user = $this->user();
-        $user->forceFill(['api_token' => hash('sha256', 'existing-token')])->save();
+        $this->issueToken($user, 'existing-token');
         $this->withToken('existing-token')->patchJson("/api/users/{$user->id}", $changes)->assertStatus(202);
 
         $this->app['auth']->forgetGuards();

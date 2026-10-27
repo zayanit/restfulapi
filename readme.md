@@ -17,7 +17,7 @@ php artisan migrate
 php artisan serve
 ```
 
-Apply migrations when upgrading too: the new `users.api_token` column is required for authentication. `php artisan db:seed` is optional and **truncates application tables**. Factories expect users before products, and products before transactions.
+Apply migrations when upgrading too: the new `api_tokens` table is required for authentication. `php artisan db:seed` is optional and **truncates application tables**. Factories expect users before products, and products before transactions.
 
 ## Authentication and access
 
@@ -29,7 +29,7 @@ curl -X POST http://127.0.0.1:8000/api/login \
   -d '{"email":"you@example.com","password":"your-password"}'
 ```
 
-Use the returned `data.token` as `Authorization: Bearer <token>` over HTTPS outside local development. Tokens are stored as SHA-256 hashes and excluded from user JSON. Login allows five attempts per minute per IP and replaces the previous token. `POST /api/logout`, password changes, and email changes revoke the current token; log in again afterward.
+Use the returned `data.token` as `Authorization: Bearer <token>` over HTTPS outside local development. Tokens are stored as SHA-256 hashes in `api_tokens`, one per login, so several clients can stay signed in at once. Login allows five attempts per minute per IP. `POST /api/logout` revokes only the token it is called with; password and email changes revoke every token for the account, so log in again afterward.
 
 | Operation | Access |
 | --- | --- |
@@ -40,7 +40,7 @@ Use the returned `data.token` as `Authorization: Bearer <token>` over HTTPS outs
 | Create a purchase | Buyer or admin; buyer and seller must be verified |
 | Create/update/delete categories | Admin |
 
-An owner can update their name or email without sending a password. To change a password, send both `password` and matching `password_confirmation`. Email changes reset verification. Product image-only updates are supported.
+An owner can update their name without sending a password. Changing the email or password also requires `current_password` (the caller's own password, so an admin editing another account confirms with their own). To change a password, send `password` and matching `password_confirmation`. Email changes reset verification. Product image-only updates are supported. Public buyer and seller listings show only profile fields (no email, role, or verification status).
 
 There is no email verification delivery flow yet. For a local development account, use `php artisan tinker` to provision a trusted admin:
 

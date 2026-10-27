@@ -53,7 +53,7 @@ class SellerProductController extends ApiController
         $data['seller_id'] = $seller->id;
 
         try {
-            $product = DB::transaction(fn () => Product::create($data));
+            $product = Product::create($data);
         } catch (Throwable $exception) {
             Storage::disk('images')->delete($data['image']);
             throw $exception;
@@ -118,7 +118,7 @@ class SellerProductController extends ApiController
         }
 
         if ($replacement !== null) {
-            Storage::disk('images')->delete($originalImage);
+            $this->deleteImageIfUnused($originalImage);
         }
 
         return $this->showOne($product);
@@ -136,8 +136,8 @@ class SellerProductController extends ApiController
 
         $this->checkSeller($seller, $product);
 
+        // soft delete only, so keep the image for a possible restore
         $product->delete();
-        Storage::disk('images')->delete($product->image);
 
         return $this->showOne($product);
     }
@@ -146,6 +146,16 @@ class SellerProductController extends ApiController
     {
         if ($seller->id != $product->seller_id) {
             throw new HttpException(422, 'The specified seller is not the actual seller of the product');
+        }
+    }
+
+    private function deleteImageIfUnused(string $image): void
+    {
+        $inUse = in_array($image, Product::SAMPLE_IMAGES)
+            || Product::withTrashed()->where('image', $image)->exists();
+
+        if (! $inUse) {
+            Storage::disk('images')->delete($image);
         }
     }
 

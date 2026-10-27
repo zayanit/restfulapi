@@ -58,11 +58,13 @@ To abort from a helper/guard method, **throw** `Symfony\Component\HttpKernel\Exc
 
 ### Auth
 
-`ApiTokenController` implements `POST /api/login` (five attempts per minute) and authenticated `POST /api/logout`. The existing `api` token guard hashes tokens with SHA-256; `users.api_token` is hidden and not mass assignable. Login replaces the previous token; logout and password/email changes revoke it. Send `Authorization: Bearer <token>` over HTTPS. Stock session auth controllers remain unrouted.
+`ApiTokenController` implements `POST /api/login` (five attempts per minute) and authenticated `POST /api/logout`. The `api` guard is a custom `api-token` request guard (registered with `Auth::viaRequest` in `AuthServiceProvider`) that looks up the SHA-256 hash of the bearer token in the `api_tokens` table (`App\ApiToken`, `User::apiTokens()`). Each login adds a row, so multiple clients can be signed in; logout deletes only the current token, and email/password changes delete all of the user's tokens. Email/password changes also require `current_password` (validated against the caller via `current_password:api`). Send `Authorization: Bearer <token>` over HTTPS. Stock session auth controllers remain unrouted.
 
 Registration and catalog reads remain public. Account reads and every other mutation require `auth:api`. `UserPolicy` permits owners/admins to view, update, and delete accounts; listing accounts and changing roles require an admin. Product updates/deletion/category associations require the product owner or admin; product creation and purchases authorize the seller/buyer account. Category writes use the admin-only `manage-categories` gate. Keep both route middleware and controller authorization when adding endpoints.
 
-Product image writes explicitly use the `images` disk. Replacement stores the new file, saves the model transactionally, then deletes the old file; a save failure cleans up the replacement. An image-only update is valid.
+Product image writes explicitly use the `images` disk. Replacement stores the new file, saves the model transactionally, then deletes the old file only if no other product (including soft-deleted ones) still references it and it isn't one of `Product::SAMPLE_IMAGES` (the committed seed images); a save failure cleans up the replacement. Deleting a product is a soft delete and keeps its image. An image-only update is valid.
+
+`Buyer` and `Seller` override `$hidden` to also hide `email`, `admin`, and `verified`, because their routes are public while `/api/users` is owner/admin-only. Any new endpoint that returns user rows publicly should return `Buyer`/`Seller` models, not `User`.
 
 ### Middleware
 
