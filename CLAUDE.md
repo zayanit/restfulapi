@@ -16,14 +16,14 @@ A Laravel 12 (PHP ^8.2) RESTful API for a marketplace domain: `Users` specialize
 - Run a single test file: `vendor/bin/phpunit tests/Feature/ExampleTest.php`
 - Run a single test method: `vendor/bin/phpunit --filter testMethodName`
 - Regenerate autoloader after adding classes: `composer dump-autoload`
-- Run migrations: `php artisan migrate`
+- Run migrations: `php artisan migrate` (add `--seed` to also seed; `DatabaseSeeder` truncates all tables first)
 - Docker stack (app + nginx + mysql 5.7): `docker-compose up -d` (see `Dockerfile`, `docker-compose.yml`)
 
 There is no configured linter/formatter (no Pint/PHPCS config present) — match the existing code style when editing.
 
-Known-broken areas:
-- **Seeding/factories don't work.** `database/factories/ModelFactory.php` uses the pre-Laravel-8 `$factory->define(...)` API and `str_random()`, and `DatabaseSeeder` calls the removed global `factory()` helper. `migrate --seed` will fail until these are rewritten as class-based factories (`HasFactory`).
-- **The test suite is just the stock examples.** `tests/Feature/ExampleTest` hits `GET /`, which 404s because `routes/web.php` is empty, so `phpunit` currently reports 1 failure. `phpunit.xml` sets no `DB_CONNECTION`, so DB-backed tests would hit the `.env` database unless you configure one (e.g. sqlite `:memory:`).
+Factories are class-based (`Database\Factories\{Model}Factory`, PSR-4 autoloaded; `User` and `ApiModel` use `HasFactory`), so use `Model::factory()`. `ProductFactory` and `TransactionFactory` pick random *existing* users/sellers/products rather than creating related models, so seed in order: users → categories → products → transactions. `DatabaseSeeder` itself stays un-namespaced in `database/seeds/`; `db:seed` falls back to it.
+
+**The test suite is just the stock examples.** `tests/Feature/ExampleTest` hits `GET /`, which 404s because `routes/web.php` is empty, so `phpunit` currently reports 1 failure. `phpunit.xml` sets no `DB_CONNECTION`, so DB-backed tests would hit the `.env` database unless you configure one (e.g. sqlite `:memory:`).
 
 ## Architecture
 
