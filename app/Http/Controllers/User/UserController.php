@@ -18,6 +18,8 @@ class UserController extends ApiController
      */
     public function index()
     {
+        $this->authorize('viewAny', User::class);
+
         return $this->showAll(User::all());
     }
 
@@ -30,14 +32,14 @@ class UserController extends ApiController
     public function store(Request $request)
     {
         $rules = [
-            'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6|confirmed'
+            'name' => 'required|string',
+            'email' => 'required|string|email|unique:users',
+            'password' => 'required|string|min:6|confirmed'
         ];
 
         $this->validate($request, $rules);
 
-        $data = $request->all();
+        $data = $request->only(['name', 'email']);
         $data['password'] = bcrypt($request->password);
         $data['verified'] = User::UNVERIFIED_USER;
         $data['verification_token'] = User::generateVerificationCode();
@@ -56,6 +58,8 @@ class UserController extends ApiController
      */
     public function show(User $user)
     {
+        $this->authorize('view', $user);
+
         return $this->showOne($user);
     }
 
@@ -68,6 +72,11 @@ class UserController extends ApiController
      */
     public function update(Request $request, User $user)
     {
+        $this->authorize('update', $user);
+        if ($request->exists('admin')) {
+            $this->authorize('updateAdmin', $user);
+        }
+
         $rules = [
             'email' => 'email|unique:users,email,'.$user->id,
             'password' => 'required|min:6|confirmed',
@@ -110,6 +119,8 @@ class UserController extends ApiController
      */
     public function destroy(User $user)
     {
+        $this->authorize('delete', $user);
+
         $user->delete();
 
         return $this->showOne($user);

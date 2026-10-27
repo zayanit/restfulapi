@@ -26,14 +26,16 @@ class CategoryController extends ApiController
      */
     public function store(Request $request)
     {
+        $this->authorize('manage-categories');
+
         $rules = [
-            'name' => 'required',
-            'description' => 'required'
+            'name' => 'required|string',
+            'description' => 'required|string'
         ];
 
         $this->validate($request, $rules);
 
-        $category = Category::create($request->all());
+        $category = Category::create($request->only(['name', 'description']));
 
         return $this->showOne($category, 201);
     }
@@ -58,7 +60,12 @@ class CategoryController extends ApiController
      */
     public function update(Request $request, Category $category)
     {
-        $category->fill($request->intersect(['name', 'description']));
+        $this->authorize('manage-categories');
+        $this->validate($request, [
+            'name' => 'sometimes|required|string',
+            'description' => 'sometimes|required|string',
+        ]);
+        $category->fill($request->only(['name', 'description']));
 
         if ($category->isClean()) {
             return $this->errorResponse('You need to specify any different value to update', 422);
@@ -77,8 +84,10 @@ class CategoryController extends ApiController
      */
     public function destroy(Category $category)
     {
+        $this->authorize('manage-categories');
+
         $category->delete();
-        
+
         return $this->showOne($category);
     }
 }

@@ -30,6 +30,8 @@ class ProductCategoryController extends ApiController
      */
     public function update(Request $request, Product $product, Category $category)
     {
+        $this->authorize('update', $product);
+
         //attach, sync, and syncWithoutDetaching
         $product->categories()->syncWithoutDetaching($category->id);
 
@@ -44,6 +46,8 @@ class ProductCategoryController extends ApiController
      */
     public function destroy(Product $product, Category $category)
     {
+        $this->authorize('update', $product);
+
         if (!$product->categories()->find($category->id)) {
             return $this->errorResponse('The specified category is not a category of this product', 404);
         }

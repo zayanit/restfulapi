@@ -32,16 +32,18 @@ class SellerProductController extends ApiController
      */
     public function store(Request $request, User $seller)
     {
+        $this->authorize('update', $seller);
+
         $rules = [
-            'name' => 'required',
-            'description' => 'required',
+            'name' => 'required|string',
+            'description' => 'required|string',
             'quantity' => 'required|integer|min:1',
             'image' => 'required|image'
         ];
 
         $this->validate($request, $rules);
 
-        $data = $request->all();
+        $data = $request->only(['name', 'description', 'quantity']);
 
         $data['status'] = Product::UNAVAILABLE_PRODUCT;
         $data['image'] = $request->image->store('');
@@ -61,6 +63,9 @@ class SellerProductController extends ApiController
      */
     public function update(Request $request, Seller $seller, Product $product)
     {
+        $this->authorize('update', $product);
+        $this->checkSeller($seller, $product);
+
         $rules = [
             'quantity' => 'integer|min:1',
             'status' => 'in:' . Product::AVAILABLE_PRODUCT . ', ' . Product::UNAVAILABLE_PRODUCT,
@@ -68,8 +73,6 @@ class SellerProductController extends ApiController
         ];
 
         $this->validate($request, $rules);
-
-        $this->checkSeller($seller, $product);
 
         $product->fill($request->only([
             'name',
@@ -107,6 +110,8 @@ class SellerProductController extends ApiController
      */
     public function destroy(Seller $seller, Product $product)
     {
+        $this->authorize('delete', $product);
+
         $this->checkSeller($seller, $product);
 
         $product->delete();

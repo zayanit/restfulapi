@@ -20,6 +20,8 @@ class ProductBuyerTransactionController extends ApiController
      */
     public function store(Request $request, Product $product, User $buyer)
     {
+        $this->authorize('update', $buyer);
+
         $rules = [
             'quantity' => 'required|integer|min:1'
         ];
@@ -43,7 +45,7 @@ class ProductBuyerTransactionController extends ApiController
 
             return $this->showOne($transaction, 201);
         });
-        
+
     }
 
     protected function checkAddingPossibility(Request $request, Product $product, User $buyer)
